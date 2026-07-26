@@ -1,4 +1,4 @@
-# Market Intel MCP — by SelfLabbs
+# Market Intel MCP — by Datakoot
 
 Live and historical foreign-exchange rates for AI agents — as MCP tools your agent can call mid-task. No API keys.
 
@@ -17,21 +17,21 @@ No API keys required for any tool.
 ## Quick start
 
 ```
-claude mcp add --transport http market-intel https://market.selflabbs.com/mcp
+claude mcp add --transport http market-intel https://market.datakoot.com/mcp
 ```
 
-Or point any MCP client at `https://market.selflabbs.com/mcp`.
+Or point any MCP client at `https://market.datakoot.com/mcp`.
 
 ## Data & attribution
 
 Rates are European Central Bank reference rates, served via the free, open-source [Frankfurter](https://frankfurter.dev) API. ECB reference rates are published for information and are not intended for use as transaction benchmarks.
 
-Looking for other data? For cryptocurrency prices see **Base Intel**, and for company financials and SEC filings see **Filings Intel** — both at [selflabbs.com](https://selflabbs.com).
+Looking for other data? For cryptocurrency prices see **Base Intel**, and for company financials and SEC filings see **Filings Intel** — both at [datakoot.com](https://datakoot.com).
 
 ## Pricing
 
 - **Free** — 100 calls/day, every tool, no key.
-- **Pro ($19/mo)** — unlimited calls; one key unlocks every SelfLabbs server.
+- **Pro ($19/mo)** — unlimited calls; one key unlocks every Datakoot server.
 - **Team ($49/mo)** — unlimited calls, up to 5 seats.
 
-Part of [SelfLabbs](https://selflabbs.com) — keyless intelligence APIs for AI agents.
+Part of [Datakoot](https://datakoot.com) — keyless intelligence APIs for AI agents.
