@@ -21,6 +21,10 @@ const UA = "Datakoot-Market-Intel/1.0 (+https://datakoot.com; contact@datakoot.c
 const SERVER = { name: "market-intel", version: "2.0.0" };
 const FRANK = "https://api.frankfurter.dev/v1";
 const ATTRIB = "ECB reference rates via Frankfurter (information only; not a transaction benchmark)";
+const MCP_VERSION = "2025-06-18";
+const MCP_ABSENT_HEADER_VERSION = "2025-03-26";
+const MAX_FX_ENTRIES = 256;
+const MAX_CURRENCY_NAME = 128;
 
 /* ------------------------------------------------------------------ helpers */
 const CORS = {
@@ -38,13 +42,52 @@ async function getJSON(url, { ttl = 1800 } = {}) {
   try { return await r.json(); } catch { return { _error: "bad json from upstream" }; }
 }
 const cur = (s) => String(s || "").trim().toUpperCase();
-const isDate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ""));
+const isDate = (s) => isCanonicalDate(s);
 const symbolsParam = (s) => {
   if (!s) return "";
   const arr = Array.isArray(s) ? s : String(s).split(",");
   const clean = arr.map(cur).filter(Boolean);
   return clean.length ? `&symbols=${clean.join(",")}` : "";
 };
+
+function isPlainDataObject(value) {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+  if (Object.getPrototypeOf(value) !== Object.prototype) return false;
+  if (Object.getOwnPropertySymbols(value).length) return false;
+  return Object.values(Object.getOwnPropertyDescriptors(value)).every((descriptor) =>
+    Object.prototype.hasOwnProperty.call(descriptor, "value"));
+}
+
+function isCurrencyCode(value) {
+  return typeof value === "string" && /^[A-Z]{3}$/.test(value);
+}
+
+function isCanonicalDate(value) {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split("-").map(Number);
+  if (year < 1 || month < 1 || month > 12 || day < 1) return false;
+  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  return day <= days[month - 1];
+}
+
+function ownEntries(value) {
+  return isPlainDataObject(value) ? Object.entries(value) : null;
+}
+
+function isRatesPayload(value) {
+  if (!isPlainDataObject(value) || !isCurrencyCode(value.base) || !isCanonicalDate(value.date)) return false;
+  const entries = ownEntries(value.rates);
+  return !!entries && entries.length > 0 && entries.length <= MAX_FX_ENTRIES &&
+    entries.every(([code, rate]) => isCurrencyCode(code) && typeof rate === "number" && Number.isFinite(rate));
+}
+
+function isCurrenciesPayload(value) {
+  const entries = ownEntries(value);
+  return !!entries && entries.length > 0 && entries.length <= MAX_FX_ENTRIES &&
+    entries.every(([code, name]) => isCurrencyCode(code) && typeof name === "string" &&
+      name.length > 0 && name.length <= MAX_CURRENCY_NAME);
+}
 
 /* --------------------------------------------------------------- paywall */
 async function checkAccess(request, env) {
@@ -77,11 +120,31 @@ async function checkAccess(request, env) {
 }
 
 /* ------------------------------------------------------------------- tools */
+const RATES_OBJECT = {
+  type: "object",
+  propertyNames: { pattern: "^[A-Z]{3}$" },
+  additionalProperties: { type: "number" },
+  minProperties: 1,
+  maxProperties: MAX_FX_ENTRIES,
+  description: "Quote currencies mapped to the ECB reference rate",
+};
+
 const TOOLS = [
   {
     name: "fx_rates",
     description: "Get the latest foreign-exchange rates for a base currency (default USD), optionally limited to specific target currencies. Source: European Central Bank reference rates.",
     inputSchema: { type: "object", properties: { base: { type: "string", description: "3-letter base currency, e.g. USD, EUR (default USD)" }, symbols: { type: "string", description: "Optional comma-separated targets, e.g. EUR,GBP,JPY" } }, required: [] },
+    outputSchema: {
+      type: "object",
+      properties: {
+        base: { type: "string", pattern: "^[A-Z]{3}$", description: "ISO 4217 base currency actually used" },
+        date: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$", description: "ECB rate date YYYY-MM-DD" },
+        rates: RATES_OBJECT,
+        source: { type: "string" },
+      },
+      required: ["base", "date", "rates", "source"],
+      additionalProperties: false,
+    },
   },
   {
     name: "fx_convert",
@@ -92,6 +155,18 @@ const TOOLS = [
     name: "fx_historical",
     description: "Get foreign-exchange rates for a base currency on a specific past date (YYYY-MM-DD). ECB publishes rates on business days; a weekend/holiday date returns the most recent prior business day.",
     inputSchema: { type: "object", properties: { date: { type: "string", description: "YYYY-MM-DD" }, base: { type: "string", description: "3-letter base (default USD)" }, symbols: { type: "string", description: "Optional comma-separated targets" } }, required: ["date"] },
+    outputSchema: {
+      type: "object",
+      properties: {
+        base: { type: "string", pattern: "^[A-Z]{3}$", description: "ISO 4217 base currency actually used" },
+        date: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$", description: "ECB rate date actually used YYYY-MM-DD" },
+        requested_date: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$", description: "Caller-requested date YYYY-MM-DD" },
+        rates: RATES_OBJECT,
+        source: { type: "string" },
+      },
+      required: ["base", "date", "requested_date", "rates", "source"],
+      additionalProperties: false,
+    },
   },
   {
     name: "fx_timeseries",
@@ -102,19 +177,36 @@ const TOOLS = [
     name: "fx_currencies",
     description: "List the currencies supported for exchange-rate lookups, with their full names.",
     inputSchema: { type: "object", properties: {}, required: [] },
+    outputSchema: {
+      type: "object",
+      properties: {
+        count: { type: "integer", description: "Number of supported currencies" },
+        currencies: {
+          type: "object",
+          propertyNames: { pattern: "^[A-Z]{3}$" },
+          additionalProperties: { type: "string", minLength: 1, maxLength: MAX_CURRENCY_NAME },
+          minProperties: 1,
+          maxProperties: MAX_FX_ENTRIES,
+          description: "ISO 4217 codes mapped to currency names",
+        },
+        source: { type: "string" },
+      },
+      required: ["count", "currencies", "source"],
+      additionalProperties: false,
+    },
   },
 ];
 
 async function runTool(name, args) {
   if (name === "fx_currencies") {
     const d = await getJSON(`${FRANK}/currencies`, { ttl: 86400 });
-    if (d._error) return { error: "currency list unavailable" };
+    if (!isCurrenciesPayload(d)) return { error: "currency list unavailable" };
     return { count: Object.keys(d).length, currencies: d, source: ATTRIB };
   }
   if (name === "fx_rates") {
     const base = cur(args.base) || "USD";
     const d = await getJSON(`${FRANK}/latest?base=${base}${symbolsParam(args.symbols)}`);
-    if (d._error || !d.rates) return { error: `Could not get rates for base '${base}'. Use a valid 3-letter currency (see fx_currencies).` };
+    if (!isRatesPayload(d)) return { error: `Could not get rates for base '${base}'. Use a valid 3-letter currency (see fx_currencies).` };
     return { base: d.base, date: d.date, rates: d.rates, source: ATTRIB };
   }
   if (name === "fx_convert") {
@@ -132,7 +224,7 @@ async function runTool(name, args) {
     if (!isDate(args.date)) return { error: "Provide 'date' as YYYY-MM-DD." };
     const base = cur(args.base) || "USD";
     const d = await getJSON(`${FRANK}/${args.date}?base=${base}${symbolsParam(args.symbols)}`);
-    if (d._error || !d.rates) return { error: `No rates for ${base} on ${args.date}. ECB data starts in 1999; use a business day.` };
+    if (!isRatesPayload(d)) return { error: `No rates for ${base} on ${args.date}. ECB data starts in 1999; use a business day.` };
     return { base: d.base, date: d.date, requested_date: args.date, rates: d.rates, source: ATTRIB };
   }
   if (name === "fx_timeseries") {
@@ -156,11 +248,16 @@ async function handleMCP(request, env) {
   try { body = await request.json(); } catch { return json(rpcErr(null, -32700, "Parse error")); }
   const { id, method, params } = body || {};
   if (method === "initialize") {
+    if (!params || typeof params.protocolVersion !== "string" || !params.protocolVersion.trim()) {
+      return json(rpcErr(id ?? null, -32602, "Unsupported protocol version"));
+    }
     return json(rpc(id, {
-      protocolVersion: "2024-11-05", capabilities: { tools: {} }, serverInfo: SERVER,
+      protocolVersion: MCP_VERSION, capabilities: { tools: {} }, serverInfo: SERVER,
       instructions: "Market Intel: live and historical foreign-exchange rates for AI agents (latest, convert, historical, time-series, currency list), sourced from European Central Bank reference rates. For crypto prices see Base Intel; for company financials see Filings Intel.",
     }));
   }
+  const requestVersion = request.headers.get("MCP-Protocol-Version") || MCP_ABSENT_HEADER_VERSION;
+  if (requestVersion !== MCP_VERSION) return json({ error: "Unsupported MCP protocol version" }, 400);
   if (method === "notifications/initialized" || method === "notifications/cancelled") return new Response(null, { status: 202, headers: CORS });
   if (method === "ping") return json(rpc(id, {}));
   if (method === "tools/list") return json(rpc(id, { tools: TOOLS }));
@@ -173,7 +270,14 @@ async function handleMCP(request, env) {
     try {
       const out = await runTool(tname, args);
       const meta = access.pro ? "" : `\n\n(${access.remaining} free calls left today)`;
-      return json(rpc(id, { content: [{ type: "text", text: JSON.stringify(out, null, 2) + meta }], isError: !!(out && out.error) }));
+      const isError = !!(out && out.error);
+      const result = {
+        content: [{ type: "text", text: JSON.stringify(out, null, 2) + meta }],
+        isError,
+      };
+      const tool = TOOLS.find((t) => t.name === tname);
+      if (!isError && tool && tool.outputSchema) result.structuredContent = out;
+      return json(rpc(id, result));
     } catch (e) {
       return json(rpc(id, { content: [{ type: "text", text: "Error: " + (e && e.message || String(e)) }], isError: true }));
     }
@@ -237,6 +341,8 @@ function landing(host) {
 <footer><a href="https://datakoot.com/" style="color:inherit">Datakoot</a> — infrastructure for the agent economy · <a href="https://github.com/datakoot">GitHub</a> · Data: European Central Bank reference rates via Frankfurter (information only)</footer>
 </body></html>`;
 }
+
+export { TOOLS, runTool };
 
 /* ------------------------------------------------------------------ router */
 export default {

@@ -14,6 +14,8 @@ Live and historical foreign-exchange rates for AI agents — as MCP tools your a
 
 No API keys required for any tool.
 
+`fx_rates`, `fx_historical`, and `fx_currencies` advertise an MCP `outputSchema` and return matching `structuredContent` on success. Error results stay errors and are not schema-validated. The JSON text body is unchanged.
+
 ## Quick start
 
 ```
@@ -33,5 +35,11 @@ Looking for other data? For cryptocurrency prices see **Base Intel**, and for co
 - **Free** — 100 calls/day, every tool, no key.
 - **Pro ($19/mo)** — unlimited calls; one key unlocks every Datakoot server.
 - **Team ($49/mo)** — unlimited calls, up to 5 seats.
+
+## Development
+
+```
+node --test
+```
 
 Part of [Datakoot](https://datakoot.com) — keyless intelligence APIs for AI agents.
