@@ -22,7 +22,6 @@ const SERVER = { name: "market-intel", version: "2.0.0" };
 const FRANK = "https://api.frankfurter.dev/v1";
 const ATTRIB = "ECB reference rates via Frankfurter (information only; not a transaction benchmark)";
 const MCP_VERSION = "2025-06-18";
-const MCP_ABSENT_HEADER_VERSION = "2025-03-26";
 const MAX_FX_ENTRIES = 256;
 const MAX_CURRENCY_NAME = 128;
 
@@ -256,8 +255,10 @@ async function handleMCP(request, env) {
       instructions: "Market Intel: live and historical foreign-exchange rates for AI agents (latest, convert, historical, time-series, currency list), sourced from European Central Bank reference rates. For crypto prices see Base Intel; for company financials see Filings Intel.",
     }));
   }
-  const requestVersion = request.headers.get("MCP-Protocol-Version") || MCP_ABSENT_HEADER_VERSION;
-  if (requestVersion !== MCP_VERSION) return json({ error: "Unsupported MCP protocol version" }, 400);
+  const requestVersion = request.headers.get("MCP-Protocol-Version");
+  if (requestVersion !== null && requestVersion !== MCP_VERSION) {
+    return json({ error: "Unsupported MCP protocol version" }, 400);
+  }
   if (method === "notifications/initialized" || method === "notifications/cancelled") return new Response(null, { status: 202, headers: CORS });
   if (method === "ping") return json(rpc(id, {}));
   if (method === "tools/list") return json(rpc(id, { tools: TOOLS }));

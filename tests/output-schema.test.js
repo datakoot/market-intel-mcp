@@ -246,15 +246,31 @@ test("initialize negotiates only the supported modern revision", async () => {
   }
 });
 
-test("subsequent HTTP requests require the supported protocol version", async () => {
+test("subsequent HTTP requests accept a missing version and reject an explicitly unsupported one", async () => {
   const absent = await rpcResponse("tools/list", {}, 1, { "MCP-Protocol-Version": undefined });
-  assert.equal(absent.status, 400);
+  assert.equal(absent.status, 200);
   const old = await rpcResponse("tools/list", {}, 1, { "MCP-Protocol-Version": "2025-03-26" });
   assert.equal(old.status, 400);
   const invalid = await rpcResponse("tools/list", {}, 1, { "MCP-Protocol-Version": "bogus" });
   assert.equal(invalid.status, 400);
   const modern = await rpcResponse("tools/list", {});
   assert.equal(modern.status, 200);
+
+  const restore = mockFetch(async () =>
+    jsonResponse({ base: "USD", date: "2026-09-02", rates: { EUR: 0.85 } }),
+  );
+  try {
+    const called = await rpc(
+      "tools/call",
+      { name: "fx_rates", arguments: {} },
+      2,
+      { "MCP-Protocol-Version": undefined },
+    );
+    assert.equal(called.result.isError, false);
+    assert.equal(called.result.structuredContent.base, "USD");
+  } finally {
+    restore();
+  }
 });
 
 test("modern projection and calls expose schemas only for modeled successful tools", async () => {
