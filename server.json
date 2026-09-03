@@ -1,17 +1,17 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.selflabbs/market-intel-mcp",
+  "name": "com.datakoot/fx-currency-exchange-rates",
   "title": "Market Intel MCP",
   "description": "Live & historical FX rates and currency conversion for AI agents. No API keys.",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "repository": {
-    "url": "https://github.com/selflabbs/market-intel-mcp",
+    "url": "https://github.com/datakoot/market-intel-mcp",
     "source": "github"
   },
   "remotes": [
     {
       "type": "streamable-http",
-      "url": "https://market.selflabbs.com/mcp"
+      "url": "https://market.datakoot.com/mcp"
     }
   ]
 }

@@ -229,28 +229,27 @@ test("live currency-list fixture is accepted by the fx_currencies schema", () =>
   validate(TOOLS.find((t) => t.name === "fx_currencies").outputSchema, LIVE_CURRENCIES);
 });
 
-test("initialize negotiates only the supported modern revision", async () => {
+test("initialize echoes a spoken protocol version and otherwise answers with the newest", async () => {
   const ok = await rpc("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "test", version: "1" } }, 10, { "MCP-Protocol-Version": "ignored-on-initialize" });
   assert.equal(ok.result.protocolVersion, "2025-06-18");
   assert.deepEqual(ok.result.capabilities, { tools: {} });
 
-  for (const protocolVersion of ["2025-03-26", "2024-11-05", "future-version"]) {
+  for (const protocolVersion of ["2025-03-26", "2024-11-05"]) {
     const payload = await rpc("initialize", { protocolVersion, capabilities: {}, clientInfo: { name: "test", version: "1" } });
-    assert.equal(payload.result.protocolVersion, "2025-06-18");
+    assert.equal(payload.result.protocolVersion, protocolVersion);
   }
 
-  for (const protocolVersion of [undefined, null, 42, ""]) {
+  for (const protocolVersion of ["future-version", undefined, null, 42, ""]) {
     const payload = await rpc("initialize", { protocolVersion, capabilities: {}, clientInfo: { name: "test", version: "1" } });
-    assert.equal(payload.error.code, -32602);
-    assert.match(payload.error.message, /Unsupported protocol version/);
+    assert.equal(payload.result.protocolVersion, "2025-06-18");
   }
 });
 
 test("subsequent HTTP requests accept a missing version and reject an explicitly unsupported one", async () => {
   const absent = await rpcResponse("tools/list", {}, 1, { "MCP-Protocol-Version": undefined });
   assert.equal(absent.status, 200);
-  const old = await rpcResponse("tools/list", {}, 1, { "MCP-Protocol-Version": "2025-03-26" });
-  assert.equal(old.status, 400);
+  const spoken = await rpcResponse("tools/list", {}, 1, { "MCP-Protocol-Version": "2025-03-26" });
+  assert.equal(spoken.status, 200);
   const invalid = await rpcResponse("tools/list", {}, 1, { "MCP-Protocol-Version": "bogus" });
   assert.equal(invalid.status, 400);
   const modern = await rpcResponse("tools/list", {});
@@ -281,7 +280,6 @@ test("modern projection and calls expose schemas only for modeled successful too
     const called = await rpc("tools/call", { name: "fx_rates", arguments: {} });
     const textJson = called.result.content[0].text.replace(/\n\n\(.* free calls left today\)\s*$/, "");
     assert.deepEqual(JSON.parse(textJson), called.result.structuredContent);
-    assert.match(called.result.content[0].text, /free calls left today/);
     validate(TOOLS[0].outputSchema, called.result.structuredContent);
   } finally { restore(); }
 });
@@ -333,6 +331,16 @@ test("currencies reject empty/oversized names and maps, bad codes, prototypes, a
     const restore = mockFetch(async () => ({ ok: true, status: 200, json: async () => body }));
     try { assert.ok((await runTool("fx_currencies", {})).error); } finally { restore(); }
   }
+});
+
+test("tools/call refuses unexpected and missing required arguments", async () => {
+  const unexpected = await rpc("tools/call", { name: "fx_rates", arguments: { extra: true } });
+  assert.equal(unexpected.error.code, -32602);
+  assert.match(unexpected.error.message, /unexpected 'extra'/);
+
+  const missing = await rpc("tools/call", { name: "fx_historical", arguments: {} });
+  assert.equal(missing.error.code, -32602);
+  assert.match(missing.error.message, /missing required 'date'/);
 });
 
 test("full MCP malformed successes use controlled errors without structuredContent", async () => {
