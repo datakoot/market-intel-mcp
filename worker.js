@@ -104,7 +104,9 @@ async function runTool(name, args) {
     const d = await getJSON(`${FRANK}/latest?base=${from}&symbols=${to}`);
     if (d._error || !d.rates || d.rates[to] == null) return { error: `Could not convert ${from}->${to}. Check the currency codes (see fx_currencies).` };
     const rate = d.rates[to];
-    return { amount, from, to, rate, result: Math.round(amount * rate * 1e6) / 1e6, date: d.date, source: ATTRIB };
+    const result = Math.round(amount * rate * 1e6) / 1e6;
+    if (!isFinite(result)) return { error: "That amount is too large to convert without overflowing. Use an amount below about 1e300." };
+    return { amount, from, to, rate, result: result, date: d.date, source: ATTRIB };
   }
   if (name === "fx_historical") {
     if (!isDate(args.date)) return { error: "Provide 'date' as YYYY-MM-DD." };
