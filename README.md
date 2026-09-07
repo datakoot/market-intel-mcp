@@ -49,13 +49,7 @@ Looking for other data? For cryptocurrency prices see **Base Intel**, and for co
 
 ## Pricing
 
-| | Free | Pro | Team |
-|---|---|---|---|
-| Price | $0 | $15/mo | $49/mo |
-| Calls included | 100 per day | 10,000 per month | 50,000 per month |
-| Past the allowance | refused until 00:00 UTC | $5 per 1,000 | $5 per 1,000 |
-| Most you can ever be billed | $0 | $115/mo | $149/mo |
-| Signup | none, no key | email + card | email + card |
+**Free** — 100 calls a day, keyless, no signup. **Pro** — $15/mo including 50,000 calls a month with no daily limit; one key unlocks all nine Datakoot servers. Go over the monthly allowance and you drop to free-tier speed for the rest of the month, or top up — never cut off, no metered overage. Full terms: [datakoot.com/pricing](https://datakoot.com/pricing).
 
 A paid allowance is shared across all nine Datakoot servers rather than being
 nine separate buckets, and only a `tools/call` counts — connecting and listing
