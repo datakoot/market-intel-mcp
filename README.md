@@ -22,6 +22,25 @@ claude mcp add --transport http market-intel https://market.datakoot.com/mcp
 
 Or point any MCP client at `https://market.datakoot.com/mcp`.
 
+## Try it in 10 seconds — no key, no signup
+
+Paste this into a terminal:
+
+```bash
+curl -s https://market.datakoot.com/mcp \
+  -H 'content-type: application/json' \
+  -H 'accept: application/json, text/event-stream' \
+  -d '{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "fx_rates", "arguments": {"base": "USD"}}}'
+```
+
+You get live USD foreign-exchange rates (European Central Bank reference data) — no API key, nothing to sign up for.
+
+Or point any MCP client at the URL and just ask your agent, in plain language:
+
+- "Convert 500 USD to euros at today's rate."
+- "How has USD/JPY moved over the last month?"
+
+
 ## Data & attribution
 
 Rates are European Central Bank reference rates, served via the free, open-source [Frankfurter](https://frankfurter.dev) API. ECB reference rates are published for information and are not intended for use as transaction benchmarks.
