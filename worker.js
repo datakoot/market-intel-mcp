@@ -193,7 +193,9 @@ async function runTool(name, args) {
     const d = await getJSON(`${FRANK}/latest?base=${from}&symbols=${to}`);
     if (d._error || !d.rates || d.rates[to] == null) return { error: `Could not convert ${from}->${to}. Check the currency codes (see fx_currencies).` };
     const rate = d.rates[to];
-    return { amount, from, to, rate, result: Math.round(amount * rate * 1e6) / 1e6, date: d.date, source: ATTRIB };
+    const result = Math.round(amount * rate * 1e6) / 1e6;
+    if (!isFinite(result)) return { error: "That amount is too large to convert without overflowing. Use an amount below about 1e300." };
+    return { amount, from, to, rate, result: result, date: d.date, source: ATTRIB };
   }
   if (name === "fx_historical") {
     if (!isDate(args.date)) return { error: "Provide 'date' as YYYY-MM-DD." };
@@ -309,8 +311,8 @@ function landing(host) {
 
 <section class="section" id="pricing"><h2>Pricing</h2><div class="tiers">
 <div class="tier"><b>Free</b><span>100 calls / day</span><span>Every tool, no key.</span></div>
-<div class="tier"><b>$15/mo · Pro</b><span>10,000 calls / month</span><span>1 seat · one key unlocks all nine Datakoot servers · then $5 per 1,000, capped at $100.</span><a class="btn" href="${CHECKOUT}">Upgrade</a></div>
-<div class="tier"><b>$49/mo · Team</b><span>50,000 calls / month</span><span>Up to 5 seats · then $5 per 1,000.</span><a class="btn" href="${CHECKOUT}">Upgrade</a></div>
+<div class="tier"><b>$15/mo · Pro</b><span>10,000 calls / month</span><span>One key unlocks all nine Datakoot servers · then $5 per 1,000, capped at $100.</span><a class="btn" href="${CHECKOUT}">Upgrade</a></div>
+<div class="tier"><b>$49/mo · Team</b><span>50,000 calls / month</span><span>One shared key for your whole team · then $5 per 1,000, capped at $100.</span><a class="btn" href="${CHECKOUT}">Upgrade</a></div>
 </div></section>
 </div>
 <footer><a href="https://datakoot.com/" style="color:inherit">Datakoot</a> — infrastructure for the agent economy · <a href="https://github.com/datakoot">GitHub</a> · Data: European Central Bank reference rates via Frankfurter (information only)</footer>

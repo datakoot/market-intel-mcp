@@ -220,9 +220,33 @@ test("tools without an outputSchema keep the prior text-only success contract", 
     assert.equal(parsed.from, "USD");
     assert.equal(parsed.to, "EUR");
     assert.equal(parsed.rate, 0.85609);
+    assert.equal(parsed.result, 8.5609);
   } finally {
     restore();
   }
+});
+
+test("fx_convert reports overflow as an MCP error instead of a successful null result", async () => {
+  const restore = mockFetch(async () => jsonResponse({ base: "USD", date: "2026-09-03", rates: { EUR: 0.85 } }));
+  try {
+    const payload = await rpc("tools/call", { name: "fx_convert", arguments: { amount: 1e308, from: "USD", to: "EUR" } });
+    assert.equal(payload.result.isError, true);
+    assert.equal(payload.result.structuredContent, undefined);
+    const parsed = JSON.parse(payload.result.content[0].text.replace(/\n\n\(.* free calls left today\)\s*$/, ""));
+    assert.match(parsed.error, /too large to convert without overflowing/);
+    assert.equal(Object.hasOwn(parsed, "result"), false);
+  } finally {
+    restore();
+  }
+});
+
+test("landing page preserves upstream shared-key pricing without seat claims", async () => {
+  const response = await worker.fetch(new Request("https://market.datakoot.com/"), {});
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /One key unlocks all nine Datakoot servers/);
+  assert.match(html, /One shared key for your whole team · then \$5 per 1,000, capped at \$100\./);
+  assert.doesNotMatch(html, /\b(?:1 seat|Up to 5 seats)\b/);
 });
 
 test("live currency-list fixture is accepted by the fx_currencies schema", () => {
